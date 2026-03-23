@@ -11,28 +11,32 @@ use gtk::{
     CssProvider, Entry, FileChooserAction, FileChooserNative, GestureClick, HeaderBar, Label,
     ListBox, ListBoxRow, MenuButton, Orientation, Popover, ResponseType, ScrolledWindow,
 };
-use rfindfiles::{CliError, Config, find_files, parse_date, parse_extensions, parse_folders};
+use rfindfiles::{Config, find_files, parse_date, parse_extensions, parse_folders};
 
 const RESULTS_PER_PAGE: usize = 50;
-const DATE_BUTTON_LABEL: &str = "Vybrat datum";
 const CUSTOM_THEME_FILE: &str = "theme.txt";
+const CUSTOM_LANGUAGE_FILE: &str = "language.txt";
 const COMMON_EXTENSIONS: [&str; 6] = ["pdf", "docx", "xlsx", "txt", "jpg", "png"];
 const THEMES: [ThemeDefinition; 4] = [
     ThemeDefinition {
         id: "theme-sand",
-        label: "Písek",
+        label_en: "Sand",
+        label_cs: "Pisek",
     },
     ThemeDefinition {
         id: "theme-forest",
-        label: "Les",
+        label_en: "Forest",
+        label_cs: "Les",
     },
     ThemeDefinition {
         id: "theme-night",
-        label: "Noc",
+        label_en: "Night",
+        label_cs: "Noc",
     },
     ThemeDefinition {
         id: "theme-ink",
-        label: "Inkoust",
+        label_en: "Ink",
+        label_cs: "Inkoust",
     },
 ];
 const DEFAULT_THEME_ID: &str = "theme-sand";
@@ -130,10 +134,234 @@ window.theme-ink .accent-button {
 }
 "#;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Language {
+    En,
+    Cs,
+}
+
+impl Language {
+    fn code(self) -> &'static str {
+        match self {
+            Self::En => "en",
+            Self::Cs => "cs",
+        }
+    }
+
+    fn from_code(value: &str) -> Self {
+        match value.trim() {
+            "cs" => Self::Cs,
+            _ => Self::En,
+        }
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::En => "Rust File Finder",
+            Self::Cs => "Rust File Finder",
+        }
+    }
+
+    fn theme_menu(self) -> &'static str {
+        match self {
+            Self::En => "Theme",
+            Self::Cs => "Vzhled",
+        }
+    }
+
+    fn language_menu(self) -> &'static str {
+        match self {
+            Self::En => "Language",
+            Self::Cs => "Jazyk",
+        }
+    }
+
+    fn folders(self) -> &'static str {
+        match self {
+            Self::En => "Folders",
+            Self::Cs => "Slozky",
+        }
+    }
+
+    fn folders_placeholder(self) -> &'static str {
+        match self {
+            Self::En => "Folders separated by commas",
+            Self::Cs => "Slozky oddelene carkou",
+        }
+    }
+
+    fn add_folder(self) -> &'static str {
+        match self {
+            Self::En => "Add Folder",
+            Self::Cs => "Pridat slozku",
+        }
+    }
+
+    fn file_types(self) -> &'static str {
+        match self {
+            Self::En => "File Types",
+            Self::Cs => "Pripony",
+        }
+    }
+
+    fn custom(self) -> &'static str {
+        match self {
+            Self::En => "Custom:",
+            Self::Cs => "Vlastni:",
+        }
+    }
+
+    fn custom_placeholder(self) -> &'static str {
+        match self {
+            Self::En => "Custom extensions, e.g. md,csv,json",
+            Self::Cs => "Vlastni pripony, napr. md,csv,json",
+        }
+    }
+
+    fn date(self) -> &'static str {
+        match self {
+            Self::En => "Date",
+            Self::Cs => "Datum",
+        }
+    }
+
+    fn from(self) -> &'static str {
+        match self {
+            Self::En => "From",
+            Self::Cs => "Od",
+        }
+    }
+
+    fn to(self) -> &'static str {
+        match self {
+            Self::En => "To",
+            Self::Cs => "Do",
+        }
+    }
+
+    fn pick_date(self) -> &'static str {
+        match self {
+            Self::En => "Pick date",
+            Self::Cs => "Vybrat datum",
+        }
+    }
+
+    fn clear(self) -> &'static str {
+        match self {
+            Self::En => "Clear",
+            Self::Cs => "Vymazat",
+        }
+    }
+
+    fn search(self) -> &'static str {
+        match self {
+            Self::En => "Search",
+            Self::Cs => "Hledat",
+        }
+    }
+
+    fn previous(self) -> &'static str {
+        match self {
+            Self::En => "Previous",
+            Self::Cs => "Predchozi",
+        }
+    }
+
+    fn next(self) -> &'static str {
+        match self {
+            Self::En => "Next",
+            Self::Cs => "Dalsi",
+        }
+    }
+
+    fn file_dialog_title(self) -> &'static str {
+        match self {
+            Self::En => "Select folder",
+            Self::Cs => "Vyberte slozku",
+        }
+    }
+
+    fn select(self) -> &'static str {
+        match self {
+            Self::En => "Select",
+            Self::Cs => "Vybrat",
+        }
+    }
+
+    fn cancel(self) -> &'static str {
+        match self {
+            Self::En => "Cancel",
+            Self::Cs => "Zrusit",
+        }
+    }
+
+    fn found_files(self, count: usize) -> String {
+        match self {
+            Self::En => format!("Files found: {count}"),
+            Self::Cs => format!("Nalezeno souboru: {count}"),
+        }
+    }
+
+    fn page(self, current: usize, total: usize) -> String {
+        match self {
+            Self::En => format!("Page {current} / {total}"),
+            Self::Cs => format!("Strana {current} / {total}"),
+        }
+    }
+
+    fn empty_page(self) -> &'static str {
+        match self {
+            Self::En => "Page 0 / 0",
+            Self::Cs => "Strana 0 / 0",
+        }
+    }
+
+    fn validation(self, error: ValidationError) -> &'static str {
+        match (self, error) {
+            (Self::En, ValidationError::MissingFolder) => "Select at least one existing folder.",
+            (Self::Cs, ValidationError::MissingFolder) => {
+                "Vyberte alespon jednu existujici slozku."
+            }
+            (Self::En, ValidationError::MissingExtension) => "Select at least one file type.",
+            (Self::Cs, ValidationError::MissingExtension) => "Vyberte alespon jeden typ souboru.",
+            (Self::En, ValidationError::InvalidDate) => {
+                "Invalid date. Use the picker to select a valid date."
+            }
+            (Self::Cs, ValidationError::InvalidDate) => {
+                "Neplatne datum. Pouzijte vyber platneho data."
+            }
+            (Self::En, ValidationError::InvalidDateRange) => {
+                "'From' must be earlier than or equal to 'To'."
+            }
+            (Self::Cs, ValidationError::InvalidDateRange) => {
+                "Pole 'Od' musi byt mensi nebo rovno poli 'Do'."
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct ThemeDefinition {
     id: &'static str,
-    label: &'static str,
+    label_en: &'static str,
+    label_cs: &'static str,
+}
+
+impl ThemeDefinition {
+    fn label(self, language: Language) -> &'static str {
+        match language {
+            Language::En => self.label_en,
+            Language::Cs => self.label_cs,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ValidationError {
+    MissingFolder,
+    MissingExtension,
+    InvalidDate,
+    InvalidDateRange,
 }
 
 #[derive(Default)]
@@ -175,6 +403,30 @@ impl PaginationState {
     }
 }
 
+struct UiTextRefs {
+    title_label: Label,
+    theme_menu_button: MenuButton,
+    language_menu_button: MenuButton,
+    folders_label: Label,
+    folders_entry: Entry,
+    add_folder_button: Button,
+    file_types_label: Label,
+    custom_label: Label,
+    custom_entry: Entry,
+    date_label: Label,
+    date_from_label: Label,
+    date_from_button: MenuButton,
+    date_from_clear: Button,
+    date_to_label: Label,
+    date_to_button: MenuButton,
+    date_to_clear: Button,
+    search_button: Button,
+    previous_button: Button,
+    next_button: Button,
+    page_label: Label,
+    theme_option_buttons: Vec<(ThemeDefinition, Button)>,
+}
+
 fn main() {
     let app = Application::builder()
         .application_id("com.example.rfindfiles")
@@ -185,9 +437,11 @@ fn main() {
 }
 
 fn build_ui(app: &Application) {
+    let language = Rc::new(RefCell::new(load_saved_language()));
+
     let window = ApplicationWindow::builder()
         .application(app)
-        .title("Rust File Finder")
+        .title(language.borrow().title())
         .default_width(980)
         .default_height(700)
         .build();
@@ -204,23 +458,56 @@ fn build_ui(app: &Application) {
         .build();
 
     let headerbar = HeaderBar::new();
-    headerbar.set_title_widget(Some(&Label::new(Some("Rust File Finder"))));
-    let theme_menu = build_theme_menu(&window);
-    headerbar.pack_end(&theme_menu);
-    window.set_titlebar(Some(&headerbar));
-    apply_theme(&window, &load_saved_theme());
-
-    let folders_entry = Entry::builder()
-        .hexpand(true)
-        .placeholder_text("Složky oddělené čárkou")
+    let title_label = Label::new(Some(language.borrow().title()));
+    headerbar.set_title_widget(Some(&title_label));
+    let theme_menu_button = MenuButton::new();
+    let theme_menu_popover = Popover::new();
+    let theme_menu_box = GtkBox::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(6)
+        .margin_top(8)
+        .margin_bottom(8)
+        .margin_start(8)
+        .margin_end(8)
         .build();
+    let theme_option_buttons = build_theme_menu_buttons(
+        &window,
+        &theme_menu_popover,
+        &theme_menu_box,
+        *language.borrow(),
+    );
+    theme_menu_popover.set_child(Some(&theme_menu_box));
+    theme_menu_button.set_popover(Some(&theme_menu_popover));
+    headerbar.pack_end(&theme_menu_button);
 
-    let add_folder_button = Button::with_label("Přidat složku");
-    let search_button = Button::with_label("Hledat");
+    let language_menu_button = MenuButton::new();
+    let language_menu_popover = Popover::new();
+    let language_menu_box = GtkBox::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(6)
+        .margin_top(8)
+        .margin_bottom(8)
+        .margin_start(8)
+        .margin_end(8)
+        .build();
+    let en_button = Button::with_label("en");
+    let cs_button = Button::with_label("cs");
+    language_menu_box.append(&en_button);
+    language_menu_box.append(&cs_button);
+    language_menu_popover.set_child(Some(&language_menu_box));
+    language_menu_button.set_popover(Some(&language_menu_popover));
+    headerbar.pack_end(&language_menu_button);
+
+    window.set_titlebar(Some(&headerbar));
+    apply_theme(&window, load_saved_theme());
+
+    let folders_entry = Entry::builder().hexpand(true).build();
+    let add_folder_button = Button::new();
+    let search_button = Button::new();
     search_button.add_css_class("accent-button");
-    let previous_button = Button::with_label("Předchozí");
-    let next_button = Button::with_label("Další");
-    let page_label = Label::new(Some("Strana 0 / 0"));
+    let previous_button = Button::new();
+    let next_button = Button::new();
+    let page_label = Label::new(None);
     let status_label = Label::new(None);
     status_label.set_xalign(0.0);
 
@@ -229,26 +516,33 @@ fn build_ui(app: &Application) {
         .spacing(12)
         .build();
     let extension_checkboxes = build_extension_checkboxes(&extensions_box);
-    let custom_extensions_entry = Entry::builder()
-        .hexpand(true)
-        .placeholder_text("Vlastní přípony, např. md,csv,json")
-        .build();
-    extensions_box.append(&Label::new(Some("Vlastní:")));
+    let custom_label = Label::new(None);
+    let custom_extensions_entry = Entry::builder().hexpand(true).build();
+    extensions_box.append(&custom_label);
     extensions_box.append(&custom_extensions_entry);
 
-    let (date_from_widget, date_from_button) = build_date_picker("Od");
-    let (date_to_widget, date_to_button) = build_date_picker("Do");
+    let (date_from_widget, date_from_label, date_from_button, date_from_clear) =
+        build_date_picker();
+    let (date_to_widget, date_to_label, date_to_button, date_to_clear) = build_date_picker();
 
+    let folders_label = Label::new(None);
     let folders_row = build_row(
-        "Složky",
+        &folders_label,
         &[
             folders_entry.clone().upcast::<gtk::Widget>(),
             add_folder_button.clone().upcast::<gtk::Widget>(),
         ],
     );
-    let filters_row = build_row("Přípony", &[extensions_box.clone().upcast::<gtk::Widget>()]);
+
+    let file_types_label = Label::new(None);
+    let filters_row = build_row(
+        &file_types_label,
+        &[extensions_box.clone().upcast::<gtk::Widget>()],
+    );
+
+    let date_label = Label::new(None);
     let dates_row = build_row(
-        "Datum",
+        &date_label,
         &[
             date_from_widget.upcast::<gtk::Widget>(),
             date_to_widget.upcast::<gtk::Widget>(),
@@ -283,18 +577,51 @@ fn build_ui(app: &Application) {
     root.append(&pagination_row);
 
     let state = Rc::new(RefCell::new(PaginationState::default()));
+    let ui_refs = Rc::new(UiTextRefs {
+        title_label,
+        theme_menu_button,
+        language_menu_button,
+        folders_label,
+        folders_entry: folders_entry.clone(),
+        add_folder_button: add_folder_button.clone(),
+        file_types_label,
+        custom_label,
+        custom_entry: custom_extensions_entry.clone(),
+        date_label,
+        date_from_label,
+        date_from_button: date_from_button.clone(),
+        date_from_clear: date_from_clear.clone(),
+        date_to_label,
+        date_to_button: date_to_button.clone(),
+        date_to_clear: date_to_clear.clone(),
+        search_button: search_button.clone(),
+        previous_button: previous_button.clone(),
+        next_button: next_button.clone(),
+        page_label: page_label.clone(),
+        theme_option_buttons,
+    });
+    apply_language(
+        &ui_refs,
+        *language.borrow(),
+        &state.borrow(),
+        None,
+        None,
+        &window,
+    );
 
     {
         let window = window.clone();
         let folders_entry = folders_entry.clone();
         let status_label = status_label.clone();
+        let language = language.clone();
         add_folder_button.connect_clicked(move |_| {
+            let current_language = *language.borrow();
             let dialog = FileChooserNative::new(
-                Some("Vyberte složku"),
+                Some(current_language.file_dialog_title()),
                 Some(&window),
                 FileChooserAction::SelectFolder,
-                Some("Vybrat"),
-                Some("Zrušit"),
+                Some(current_language.select()),
+                Some(current_language.cancel()),
             );
 
             let folders_entry = folders_entry.clone();
@@ -327,14 +654,16 @@ fn build_ui(app: &Application) {
         let date_to_button = date_to_button.clone();
         let extension_checkboxes = extension_checkboxes.clone();
         let state = state.clone();
+        let language = language.clone();
         search_button.connect_clicked(move |_| {
+            let current_language = *language.borrow();
             let extensions_raw =
                 collect_extensions(&extension_checkboxes, &custom_extensions_entry);
             match build_config(
                 &folders_entry.text(),
                 &extensions_raw,
-                &button_date_value(&date_from_button),
-                &button_date_value(&date_to_button),
+                &button_date_value(&date_from_button, current_language),
+                &button_date_value(&date_to_button, current_language),
             ) {
                 Ok(config) => {
                     let results = find_files(&config);
@@ -346,8 +675,9 @@ fn build_ui(app: &Application) {
                         &previous_button,
                         &next_button,
                         &state,
+                        current_language,
                     );
-                    status_label.set_text(&format!("Nalezeno souborů: {total}"));
+                    status_label.set_text(&current_language.found_files(total));
                 }
                 Err(err) => {
                     state.borrow_mut().set_results(Vec::new());
@@ -357,8 +687,9 @@ fn build_ui(app: &Application) {
                         &previous_button,
                         &next_button,
                         &state,
+                        current_language,
                     );
-                    status_label.set_text(&err.to_string());
+                    status_label.set_text(current_language.validation(err));
                 }
             }
         });
@@ -372,6 +703,7 @@ fn build_ui(app: &Application) {
         let state_handle = state.clone();
         let previous_button_for_refresh = previous_button.clone();
         let next_button_for_refresh = next_button.clone();
+        let language = language.clone();
         previous_button.connect_clicked(move |_| {
             let mut state = state_handle.borrow_mut();
             if state.can_go_previous() {
@@ -384,6 +716,7 @@ fn build_ui(app: &Application) {
                 &previous_button_for_refresh,
                 &next_button_for_refresh,
                 &state_handle,
+                *language.borrow(),
             );
         });
     }
@@ -396,6 +729,7 @@ fn build_ui(app: &Application) {
         let state_handle = state.clone();
         let previous_button_for_refresh = previous_button.clone();
         let next_button_for_refresh = next_button.clone();
+        let language = language.clone();
         next_button.connect_clicked(move |_| {
             let mut state = state_handle.borrow_mut();
             if state.can_go_next() {
@@ -408,7 +742,52 @@ fn build_ui(app: &Application) {
                 &previous_button_for_refresh,
                 &next_button_for_refresh,
                 &state_handle,
+                *language.borrow(),
             );
+        });
+    }
+
+    {
+        let ui_refs = ui_refs.clone();
+        let language = language.clone();
+        let state = state.clone();
+        let status_label = status_label.clone();
+        let window = window.clone();
+        let language_menu_popover = language_menu_popover.clone();
+        en_button.connect_clicked(move |_| {
+            *language.borrow_mut() = Language::En;
+            let _ = save_language(Language::En);
+            apply_language(
+                &ui_refs,
+                Language::En,
+                &state.borrow(),
+                Some(&status_label),
+                status_label.text().as_str().into(),
+                &window,
+            );
+            language_menu_popover.popdown();
+        });
+    }
+
+    {
+        let ui_refs = ui_refs.clone();
+        let language = language.clone();
+        let state = state.clone();
+        let status_label = status_label.clone();
+        let window = window.clone();
+        let language_menu_popover = language_menu_popover.clone();
+        cs_button.connect_clicked(move |_| {
+            *language.borrow_mut() = Language::Cs;
+            let _ = save_language(Language::Cs);
+            apply_language(
+                &ui_refs,
+                Language::Cs,
+                &state.borrow(),
+                Some(&status_label),
+                status_label.text().as_str().into(),
+                &window,
+            );
+            language_menu_popover.popdown();
         });
     }
 
@@ -418,6 +797,7 @@ fn build_ui(app: &Application) {
         &previous_button,
         &next_button,
         &state,
+        *language.borrow(),
     );
 
     window.set_child(Some(&root));
@@ -443,20 +823,16 @@ fn setup_css(window: &ApplicationWindow) {
     }
 }
 
-fn build_theme_menu(window: &ApplicationWindow) -> MenuButton {
-    let menu_button = MenuButton::builder().label("Vzhled").build();
-    let popover = Popover::new();
-    let container = GtkBox::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(6)
-        .margin_top(8)
-        .margin_bottom(8)
-        .margin_start(8)
-        .margin_end(8)
-        .build();
+fn build_theme_menu_buttons(
+    window: &ApplicationWindow,
+    popover: &Popover,
+    container: &GtkBox,
+    language: Language,
+) -> Vec<(ThemeDefinition, Button)> {
+    let mut buttons = Vec::with_capacity(THEMES.len());
 
     for theme in THEMES {
-        let button = Button::with_label(theme.label);
+        let button = Button::with_label(theme.label(language));
         let window = window.clone();
         let popover = popover.clone();
         button.connect_clicked(move |_| {
@@ -465,11 +841,10 @@ fn build_theme_menu(window: &ApplicationWindow) -> MenuButton {
             popover.popdown();
         });
         container.append(&button);
+        buttons.push((theme, button));
     }
 
-    popover.set_child(Some(&container));
-    menu_button.set_popover(Some(&popover));
-    menu_button
+    buttons
 }
 
 fn build_extension_checkboxes(container: &GtkBox) -> Vec<(String, CheckButton)> {
@@ -484,16 +859,16 @@ fn build_extension_checkboxes(container: &GtkBox) -> Vec<(String, CheckButton)> 
     result
 }
 
-fn build_date_picker(prefix: &str) -> (GtkBox, MenuButton) {
+fn build_date_picker() -> (GtkBox, Label, MenuButton, Button) {
     let wrapper = GtkBox::builder()
         .orientation(Orientation::Horizontal)
         .spacing(6)
         .build();
-    let label = Label::new(Some(prefix));
-    let button = MenuButton::builder().label(DATE_BUTTON_LABEL).build();
+    let label = Label::new(None);
+    let button = MenuButton::new();
     let popover = Popover::new();
     let calendar = Calendar::new();
-    let clear_button = Button::with_label("Vymazat");
+    let clear_button = Button::new();
 
     {
         let button = button.clone();
@@ -511,33 +886,25 @@ fn build_date_picker(prefix: &str) -> (GtkBox, MenuButton) {
         });
     }
 
-    {
-        let button = button.clone();
-        clear_button.connect_clicked(move |_| {
-            button.set_label(DATE_BUTTON_LABEL);
-        });
-    }
-
     popover.set_child(Some(&calendar));
     button.set_popover(Some(&popover));
     wrapper.append(&label);
     wrapper.append(&button);
     wrapper.append(&clear_button);
 
-    (wrapper, button)
+    (wrapper, label, button, clear_button)
 }
 
-fn build_row(label_text: &str, widgets: &[gtk::Widget]) -> GtkBox {
+fn build_row(label: &Label, widgets: &[gtk::Widget]) -> GtkBox {
     let row = GtkBox::builder()
         .orientation(Orientation::Horizontal)
         .spacing(8)
         .build();
 
-    let label = Label::new(Some(label_text));
     label.set_width_chars(10);
     label.set_xalign(0.0);
     label.set_halign(Align::Start);
-    row.append(&label);
+    row.append(label);
 
     for widget in widgets {
         row.append(widget);
@@ -582,9 +949,9 @@ fn collect_extensions(checkboxes: &[(String, CheckButton)], custom_entry: &Entry
     selected.join(",")
 }
 
-fn button_date_value(button: &MenuButton) -> String {
+fn button_date_value(button: &MenuButton, language: Language) -> String {
     match button.label() {
-        Some(label) if label != DATE_BUTTON_LABEL => label.to_string(),
+        Some(label) if label != language.pick_date() => label.to_string(),
         _ => String::new(),
     }
 }
@@ -594,37 +961,31 @@ fn build_config(
     extensions_raw: &str,
     date_from_raw: &str,
     date_to_raw: &str,
-) -> Result<Config, CliError> {
+) -> Result<Config, ValidationError> {
     let folders = parse_folders(folders_raw);
     if folders.is_empty() {
-        return Err(CliError::Message(
-            "Vyberte alespoň jednu existující složku.".to_string(),
-        ));
+        return Err(ValidationError::MissingFolder);
     }
 
     let extensions = parse_extensions(extensions_raw);
     if extensions.is_empty() {
-        return Err(CliError::Message(
-            "Vyberte alespoň jeden typ souboru.".to_string(),
-        ));
+        return Err(ValidationError::MissingExtension);
     }
 
     let date_from = if date_from_raw.trim().is_empty() {
         None
     } else {
-        Some(parse_date(date_from_raw, false)?)
+        Some(parse_date(date_from_raw, false).map_err(|_| ValidationError::InvalidDate)?)
     };
     let date_to = if date_to_raw.trim().is_empty() {
         None
     } else {
-        Some(parse_date(date_to_raw, true)?)
+        Some(parse_date(date_to_raw, true).map_err(|_| ValidationError::InvalidDate)?)
     };
 
     if let (Some(from), Some(to)) = (date_from, date_to) {
         if from > to {
-            return Err(CliError::Message(
-                "Pole 'Datum od' musí být menší nebo rovno 'Datum do'.".to_string(),
-            ));
+            return Err(ValidationError::InvalidDateRange);
         }
     }
 
@@ -642,6 +1003,7 @@ fn refresh_results(
     previous_button: &Button,
     next_button: &Button,
     state: &Rc<RefCell<PaginationState>>,
+    language: Language,
 ) {
     while let Some(child) = results_list.first_child() {
         results_list.remove(&child);
@@ -674,13 +1036,9 @@ fn refresh_results(
 
     let total_pages = state_ref.total_pages();
     if total_pages == 0 {
-        page_label.set_text("Strana 0 / 0");
+        page_label.set_text(language.empty_page());
     } else {
-        page_label.set_text(&format!(
-            "Strana {} / {}",
-            state_ref.current_page + 1,
-            total_pages
-        ));
+        page_label.set_text(&language.page(state_ref.current_page + 1, total_pages));
     }
 
     previous_button.set_sensitive(state_ref.can_go_previous());
@@ -705,8 +1063,72 @@ fn apply_theme(window: &ApplicationWindow, theme_id: &str) {
     window.add_css_class(selected);
 }
 
+fn apply_language(
+    ui: &UiTextRefs,
+    language: Language,
+    pagination: &PaginationState,
+    status_label: Option<&Label>,
+    existing_status: Option<&str>,
+    window: &ApplicationWindow,
+) {
+    window.set_title(Some(language.title()));
+    ui.title_label.set_text(language.title());
+    ui.theme_menu_button.set_label(language.theme_menu());
+    ui.language_menu_button.set_label(language.language_menu());
+    ui.folders_label.set_text(language.folders());
+    ui.folders_entry
+        .set_placeholder_text(Some(language.folders_placeholder()));
+    ui.add_folder_button.set_label(language.add_folder());
+    ui.file_types_label.set_text(language.file_types());
+    ui.custom_label.set_text(language.custom());
+    ui.custom_entry
+        .set_placeholder_text(Some(language.custom_placeholder()));
+    ui.date_label.set_text(language.date());
+    ui.date_from_label.set_text(language.from());
+    ui.date_to_label.set_text(language.to());
+    ui.date_from_clear.set_label(language.clear());
+    ui.date_to_clear.set_label(language.clear());
+    ui.search_button.set_label(language.search());
+    ui.previous_button.set_label(language.previous());
+    ui.next_button.set_label(language.next());
+
+    if button_label_is_date_placeholder(&ui.date_from_button) {
+        ui.date_from_button.set_label(language.pick_date());
+    }
+    if button_label_is_date_placeholder(&ui.date_to_button) {
+        ui.date_to_button.set_label(language.pick_date());
+    }
+
+    for (theme, button) in &ui.theme_option_buttons {
+        button.set_label(theme.label(language));
+    }
+
+    if pagination.total_pages() == 0 {
+        ui.page_label.set_text(language.empty_page());
+    } else {
+        ui.page_label
+            .set_text(&language.page(pagination.current_page + 1, pagination.total_pages()));
+    }
+
+    if let (Some(status_label), Some(existing_status)) = (status_label, existing_status) {
+        if existing_status.is_empty() {
+            return;
+        }
+
+        if existing_status.starts_with("Files found: ")
+            || existing_status.starts_with("Nalezeno souboru: ")
+        {
+            status_label.set_text(&language.found_files(pagination.all_results.len()));
+        }
+    }
+}
+
+fn button_label_is_date_placeholder(button: &MenuButton) -> bool {
+    matches!(button.label(), Some(label) if label == Language::En.pick_date() || label == Language::Cs.pick_date())
+}
+
 fn load_saved_theme() -> &'static str {
-    let Ok(content) = fs::read_to_string(theme_settings_path()) else {
+    let Ok(content) = fs::read_to_string(settings_path(CUSTOM_THEME_FILE)) else {
         return DEFAULT_THEME_ID;
     };
     let selected = content.trim();
@@ -719,7 +1141,7 @@ fn load_saved_theme() -> &'static str {
 }
 
 fn save_theme(theme_id: &str) -> std::io::Result<()> {
-    let path = theme_settings_path();
+    let path = settings_path(CUSTOM_THEME_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -727,25 +1149,38 @@ fn save_theme(theme_id: &str) -> std::io::Result<()> {
     fs::write(path, format!("{theme_id}\n"))
 }
 
-fn theme_settings_path() -> PathBuf {
+fn load_saved_language() -> Language {
+    let Ok(content) = fs::read_to_string(settings_path(CUSTOM_LANGUAGE_FILE)) else {
+        return Language::En;
+    };
+
+    Language::from_code(&content)
+}
+
+fn save_language(language: Language) -> std::io::Result<()> {
+    let path = settings_path(CUSTOM_LANGUAGE_FILE);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(path, format!("{}\n", language.code()))
+}
+
+fn settings_path(file_name: &str) -> PathBuf {
     if let Some(appdata) = std::env::var_os("APPDATA") {
-        return PathBuf::from(appdata)
-            .join("rfindfiles")
-            .join(CUSTOM_THEME_FILE);
+        return PathBuf::from(appdata).join("rfindfiles").join(file_name);
     }
 
     if let Some(xdg_config) = std::env::var_os("XDG_CONFIG_HOME") {
-        return PathBuf::from(xdg_config)
-            .join("rfindfiles")
-            .join(CUSTOM_THEME_FILE);
+        return PathBuf::from(xdg_config).join("rfindfiles").join(file_name);
     }
 
     if let Some(home) = std::env::var_os("HOME") {
         return PathBuf::from(home)
             .join(".config")
             .join("rfindfiles")
-            .join(CUSTOM_THEME_FILE);
+            .join(file_name);
     }
 
-    PathBuf::from(CUSTOM_THEME_FILE)
+    PathBuf::from(file_name)
 }
